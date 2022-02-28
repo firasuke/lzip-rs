@@ -1,0 +1,17 @@
+[package]
+name = "lzip"
+version = "0.1.0"
+authors = ["Firas Khalil Khana <firasuke@glaucuslinux.org>"]
+license = "MIT/Apache-2.0"
+readme = "README.md"
+keywords = ["lzip", "encoding"]
+repository = "https://github.com/firasuke/lzip-rs"
+homepage = "https://github.com/firasuke/lzip-rs"
+description = """
+Bindings to lzlib for lzip compression and decompression exposed as
+Reader/Writer streams.
+"""
+categories = ["compression", "api-bindings"]
+
+[dependencies]
+lzip-sys = { version = "0.1.0", path = "lzip-sys" }
