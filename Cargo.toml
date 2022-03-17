@@ -13,5 +13,13 @@ Reader/Writer streams.
 """
 categories = ["compression", "api-bindings"]
 
+[workspace]
+
 [dependencies]
+futures = { version = "0.3.21", optional = true }
 lzip-sys = { version = "0.1.0", path = "lzip-sys" }
+tokio-io = { version = "0.1.13", optional = true }
+
+[features]
+tokio = ["futures", "tokio-io"]
+static = ["lzip-sys/static"]
