@@ -1,2 +1,2 @@
 #include <stdint.h>
-#include <lzlib.h>
+#include "lzlib.h"
