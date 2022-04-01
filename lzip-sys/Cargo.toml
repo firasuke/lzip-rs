@@ -18,13 +18,6 @@ categories = ["external-ffi-bindings"]
 name = "lzip_sys"
 path = "src/lib.rs"
 
-[dependencies]
-libc = "0.2.120"
-
-[build-dependencies]
-bindgen = "0.59.2"
-cc = { version = "1.0.73", features = ["parallel"] }
-
 [features]
 # Enable this feature if you want to have a statically linked lzip
 static = []

@@ -1,8 +1,6 @@
 #![doc(html_root_url = "https://docs.rs/lzip-sys/")]
 
-extern crate libc;
-
-use libc::{c_char, c_int, c_uint, c_ulonglong};
+use std::os::raw::{c_char, c_int, c_uint, c_ulonglong};
 
 pub const LZ_API_VERSION: u32 = 1013;
 pub const LZ_VERSION_STRING: &[u8; 5usize] = b"1.13\0";
