@@ -1,6 +1,6 @@
 [package]
 name = "lzip-sys"
-version = "0.1.1+1.13"
+version = "0.1.2+1.13"
 authors = ["Firas Khalil Khana <firasuke@glaucuslinux.org>"]
 links = "lzip"
 build = "build.rs"
@@ -17,6 +17,9 @@ categories = ["external-ffi-bindings"]
 [lib]
 name = "lzip_sys"
 path = "src/lib.rs"
+
+[dependencies]
+libc = "0.2.121"
 
 [features]
 # Enable this feature if you want to have a statically linked lzip
