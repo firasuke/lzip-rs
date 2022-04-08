@@ -19,7 +19,7 @@ name = "lzip_sys"
 path = "src/lib.rs"
 
 [dependencies]
-libc = "0.2.121"
+libc = "0.2.122"
 
 [features]
 # Enable this feature if you want to have a statically linked lzip

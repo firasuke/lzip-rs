@@ -3,10 +3,17 @@
 use std::io;
 use std::io::prelude::*;
 
+#[cfg(feature = "tokio")]
+use futures::Poll;
+#[cfg(feature = "tokio")]
+use tokio_io::{AsyncRead, AsyncWrite};
+
+use stream::{Action, Check, Status, Stream};
+
 /// A compression stream which will have uncompressed data written to it and
 /// will write compressed data to an output stream.
 pub struct LzEncoder<W: Write> {
-    data: Compress,
+    data: Stream,
     obj: Option<W>,
     buf: Vec<u8>,
     done: bool,
@@ -15,7 +22,7 @@ pub struct LzEncoder<W: Write> {
 /// A compression stream which will have compressed data written to it and
 /// will write uncompressed data to an output stream.
 pub struct LzDecoder<W: Write> {
-    data: Decompress,
+    data: Stream,
     obj: Option<W>,
     buf: Vec<u8>,
     done: bool,
@@ -24,12 +31,18 @@ pub struct LzDecoder<W: Write> {
 impl<W: Write> LzEncoder<W> {
     /// Create a new compression stream which will compress at the given level
     /// to write compress output to the give output stream.
-    pub fn new(obj: W, level: Compression) -> LzEncoder<W> {
+    pub fn new(obj: W, level: u32) -> LzEncoder<W> {
+        let stream = Stream::new_easy_encoder(level, Check::Crc64).unwrap();
+        LzEncoder::new_stream(obj, stream)
+    }
+
+    /// Create a new encoder which will use the specified `Stream` to encode
+    /// (compress) data into the provided `obj`.
+    pub fn new_stream(obj: W, stream: Stream) -> LzEncoder<W> {
         LzEncoder {
-            data: Compress::new(level, 30),
+            data: stream,
             obj: Some(obj),
             buf: Vec::with_capacity(32 * 1024),
-            done: false,
         }
     }
 
@@ -113,7 +126,7 @@ impl<W: Write> Write for LzEncoder<W> {
 
             let total_in = self.total_in();
             self.data
-                .compress_vec(data, &mut self.buf, Action::Run)
+                .process_vec(data, &mut self.buf, Action::Run)
                 .unwrap();
             let written = (self.total_in() - total_in) as usize;
 
@@ -164,6 +177,34 @@ impl<W: Write> Drop for LzEncoder<W> {
 }
 
 impl<W: Write> LzDecoder<W> {
+    /// Creates a new decoding stream which will decode into `obj` one lzip stream
+    /// from the input written to it.
+    pub fn new(obj: W) -> LzDecoder<W> {
+        let stream = Stream::new_stream_decoder(u64::max_value(), 0).unwrap();
+        LzDecoder::new_stream(obj, stream)
+    }
+
+    /// Creates a new decoding stream which will decode into `obj` all the lzip streams
+    /// from the input written to it.
+    pub fn new_multi_decoder(obj: W) -> LzDecoder<W> {
+        let stream =
+            Stream::new_stream_decoder(u64::max_value(), lzma_sys::LZMA_CONCATENATED).unwrap();
+        LzDecoder::new_stream(obj, stream)
+    }
+
+    /// Creates a new decoding stream which will decode all input written to it
+    /// into `obj`.
+    ///
+    /// A custom `stream` can be specified to configure what format this decoder
+    /// will recognize or configure other various decoding options.
+    pub fn new_stream(obj: W, stream: Stream) -> LzDecoder<W> {
+        LzDecoder {
+            data: stream,
+            obj: Some(obj),
+            buf: Vec::with_capacity(32 * 1024),
+        }
+    }
+
     /// Acquires a reference to the underlying writer.
     pub fn get_ref(&self) -> &W {
         self.obj.as_ref().unwrap()
@@ -183,6 +224,39 @@ impl<W: Write> LzDecoder<W> {
             self.buf.truncate(0);
         }
         Ok(())
+    }
+
+    /// Attempt to finish this output stream, writing out final chunks of data.
+    ///
+    /// Note that this function can only be used once data has finished being
+    /// written to the output stream. After this function is called then further
+    /// calls to `write` may result in a panic.
+    ///
+    /// # Panics
+    ///
+    /// Attempts to write data to this stream may result in a panic after this
+    /// function is called.
+    fn try_finish(&mut self) -> io::Result<()> {
+        loop {
+            self.dump()?;
+            let res = self.data.process_vec(&[], &mut self.buf, Action::Finish)?;
+
+            // When decoding a truncated file, Lzip returns LZMA_BUF_ERROR and
+            // decodes no new data, which corresponds to this crate's MemNeeded
+            // status.  Since we're finishing, we cannot provide more data so
+            // this is an error.
+            //
+            // See the 02_decompress.c example in xz-utils.
+            if self.buf.is_empty() && res == Status::MemNeeded {
+                let msg = "lzip compressed stream is truncated or otherwise corrupt";
+                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, msg));
+            }
+
+            if res == Status::StreamEnd {
+                break;
+            }
+        }
+        self.dump()
     }
 
     /// Unwrap the underlying writer, finishing the compression stream.
@@ -213,7 +287,26 @@ impl<W: Write> LzDecoder<W> {
     }
 }
 
-impl<W: Write> Write for LzDecoder<W> {}
+impl<W: Write> Write for LzDecoder<W> {
+    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+        loop {
+            self.dump()?;
+
+            let before = self.total_in();
+            let res = self.data.process_vec(data, &mut self.buf, Action::Run)?;
+            let written = (self.total_in() - before) as usize;
+
+            if written > 0 || data.len() == 0 || res == Status::StreamEnd {
+                return Ok(written);
+            }
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.dump()?;
+        self.obj.as_mut().unwrap().flush()
+    }
+}
 
 #[cfg(feature = "tokio")]
 impl<W: AsyncWrite> AsyncWrite for LzDecoder<W> {
@@ -242,14 +335,14 @@ impl<W: Write> Drop for LzDecoder<W> {
 
 #[cfg(test)]
 mod tests {
-    use super::{XzDecoder, XzEncoder};
+    use super::{LzDecoder, LzEncoder};
     use std::io::prelude::*;
     use std::iter::repeat;
 
     #[test]
     fn smoke() {
-        let d = XzDecoder::new(Vec::new());
-        let mut c = XzEncoder::new(d, 6);
+        let d = LzDecoder::new(Vec::new());
+        let mut c = LzEncoder::new(d, 6);
         c.write_all(b"12834").unwrap();
         let s = repeat("12345").take(100000).collect::<String>();
         c.write_all(s.as_bytes()).unwrap();
@@ -261,8 +354,8 @@ mod tests {
 
     #[test]
     fn write_empty() {
-        let d = XzDecoder::new(Vec::new());
-        let mut c = XzEncoder::new(d, 6);
+        let d = LzDecoder::new(Vec::new());
+        let mut c = LzEncoder::new(d, 6);
         c.write(b"").unwrap();
         let data = c.finish().unwrap().finish().unwrap();
         assert_eq!(&data[..], b"");
@@ -273,8 +366,8 @@ mod tests {
         ::quickcheck::quickcheck(test as fn(_) -> _);
 
         fn test(v: Vec<u8>) -> bool {
-            let w = XzDecoder::new(Vec::new());
-            let mut w = XzEncoder::new(w, 6);
+            let w = LzDecoder::new(Vec::new());
+            let mut w = LzEncoder::new(w, 6);
             w.write_all(&v).unwrap();
             v == w.finish().unwrap().finish().unwrap()
         }

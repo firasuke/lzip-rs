@@ -9,7 +9,7 @@ use futures::Poll;
 use tokio_io::{AsyncRead, AsyncWrite};
 
 use bufread;
-use Compression;
+use stream::Stream;
 
 /// A compression stream which wraps an uncompressed stream of data. Compressed
 /// data will be read from the stream.
@@ -31,6 +31,16 @@ impl<R: Read> LzEncoder<R> {
     pub fn new(r: R, level: u32) -> LzEncoder<R> {
         LzEncoder {
             inner: bufread::LzEncoder::new(BufReader::new(r), level),
+        }
+    }
+
+    /// Creates a new encoder with a custom `Stream`.
+    ///
+    /// The `Stream` can be pre-configured for multithreaded encoding, different
+    /// compression options/tuning, etc.
+    pub fn new_stream(r: R, stream: Stream) -> LzEncoder<R> {
+        LzEncoder {
+            inner: bufread::LzEncoder::new_stream(BufReader::new(r), stream),
         }
     }
 
@@ -100,10 +110,30 @@ impl<R: AsyncWrite + Read> AsyncWrite for LzEncoder<R> {
 
 impl<R: Read> LzDecoder<R> {
     /// Create a new decompression stream, which will read compressed
-    /// data from the given input stream and decompress it.
+    /// data from the given input stream, and decompress one lzip stream.
+    /// It may also consume input data that follows the lzip stream.
+    /// Use [`lzip::bufread::LzDecoder`] instead to process a mix of lzip and non-lzip data.
     pub fn new(r: R) -> LzDecoder<R> {
         LzDecoder {
             inner: bufread::LzDecoder::new(BufReader::new(r)),
+        }
+    }
+
+    /// Create a new decompression stream, which will read compressed
+    /// data from the given input and decompress all the lzip stream it contains.
+    pub fn new_multi_decoder(r: R) -> LzDecoder<R> {
+        LzDecoder {
+            inner: bufread::LzDecoder::new_multi_decoder(BufReader::new(r)),
+        }
+    }
+
+    /// Creates a new decoder with a custom `Stream`.
+    ///
+    /// The `Stream` can be pre-configured for various checks, different
+    /// decompression options/tuning, etc.
+    pub fn new_stream(r: R, stream: Stream) -> LzDecoder<R> {
+        LzDecoder {
+            inner: bufread::LzDecoder::new_stream(BufReader::new(r), stream),
         }
     }
 
@@ -144,8 +174,8 @@ impl<R: Read> LzDecoder<R> {
 }
 
 impl<R: Read> Read for LzDecoder<R> {
-    fn read(&mut self, into: &mut [u8]) -> io::Result<usize> {
-        self.inner.read(into)
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.inner.read(buf)
     }
 }
 
@@ -171,8 +201,8 @@ impl<R: AsyncWrite + Read> AsyncWrite for LzDecoder<R> {
 
 #[cfg(test)]
 mod tests {
-    use crate::read::{LzDecoder, LzEncoder};
     use rand::{thread_rng, Rng};
+    use read::{LzDecoder, LzEncoder};
     use std::io::prelude::*;
     use std::iter;
 
@@ -269,6 +299,50 @@ mod tests {
             let mut v2 = Vec::new();
             r.read_to_end(&mut v2).unwrap();
             v == v2
+        }
+    }
+
+    #[test]
+    fn two_streams() {
+        let mut input_stream1: Vec<u8> = Vec::new();
+        let mut input_stream2: Vec<u8> = Vec::new();
+        let mut all_input: Vec<u8> = Vec::new();
+
+        // Generate input data.
+        const STREAM1_SIZE: usize = 1024;
+        for num in 0..STREAM1_SIZE {
+            input_stream1.push(num as u8)
+        }
+        const STREAM2_SIZE: usize = 532;
+        for num in 0..STREAM2_SIZE {
+            input_stream2.push((num + 32) as u8)
+        }
+        all_input.extend(&input_stream1);
+        all_input.extend(&input_stream2);
+
+        // Make a vector with compressed data
+        let mut decoder_input = Vec::new();
+        {
+            let mut encoder = LzEncoder::new(&input_stream1[..], 6);
+            encoder.read_to_end(&mut decoder_input).unwrap();
+        }
+        {
+            let mut encoder = LzEncoder::new(&input_stream2[..], 6);
+            encoder.read_to_end(&mut decoder_input).unwrap();
+        }
+
+        // Decoder must be able to read the 2 concatenated lzip streams and get the same data as input.
+        let mut decoder_reader = &decoder_input[..];
+        {
+            // using `LzDecoder::new` here would fail because only 1 lzip stream would be processed.
+            let mut decoder = LzDecoder::new_multi_decoder(&mut decoder_reader);
+            let mut decompressed_data = vec![0u8; all_input.len()];
+
+            assert_eq!(
+                decoder.read(&mut decompressed_data).unwrap(),
+                all_input.len()
+            );
+            assert_eq!(decompressed_data, &all_input[..]);
         }
     }
 }
