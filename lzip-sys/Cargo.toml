@@ -21,6 +21,9 @@ path = "src/lib.rs"
 [dependencies]
 libc = "0.2.122"
 
+[build-dependencies]
+cc = "1.0.73"
+
 [features]
 # Enable this feature if you want to have a statically linked lzip
 static = []
