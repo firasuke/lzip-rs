@@ -103,7 +103,7 @@ pub enum Action {
     /// been consumed.
     ///
     /// `FullBarrier` is useful with a threaded encoder if one wants to split
-    /// the .xz Stream into blocks at specific offsets but doesn't care if the
+    /// the .lz Stream into blocks at specific offsets but doesn't care if the
     /// output isn't flushed immediately. Using `FullBarrier` allows keeping the
     /// threads busy while `FullFlush` would make `process` wait until all the
     /// threads have finished until more data could be passed to the encoder.
@@ -188,7 +188,7 @@ pub enum Error {
     UnsupportedCheck,
 }
 
-/// Possible integrity checks that can be part of a .xz stream.
+/// Possible integrity checks that can be part of a .lz stream.
 #[allow(missing_docs)] // self explanatory mostly
 #[derive(Copy, Clone)]
 pub enum Check {
@@ -263,11 +263,11 @@ pub const TELL_UNSUPPORTED_CHECK: u32 = lzma_sys::LZMA_TELL_UNSUPPORTED_CHECK;
 pub const IGNORE_CHECK: u32 = lzma_sys::LZMA_TELL_UNSUPPORTED_CHECK;
 
 /// A flag passed when initializing a decoder, indicates that the stream may be
-/// multiple concatenated xz files.
+/// multiple concatenated lzip files.
 pub const CONCATENATED: u32 = lzma_sys::LZMA_CONCATENATED;
 
 impl Stream {
-    /// Initialize .xz stream encoder using a preset number
+    /// Initialize .lz stream encoder using a preset number
     ///
     /// This is intended to be used by most for encoding data. The `preset`
     /// argument is a number 0-9 indicating the compression level to use, and
@@ -294,7 +294,7 @@ impl Stream {
     /// LZMA1 filter. There is no support for integrity checks like CRC32.
     ///
     /// Use this function if and only if you need to create files readable by
-    /// legacy LZMA tools such as LZMA Utils 4.32.x. Moving to the .xz format
+    /// legacy LZMA tools such as LZMA Utils 4.32.x. Moving to the .lz format
     /// (the `new_easy_encoder` function) is strongly recommended.
     ///
     /// The valid action values for `process` are `Run` and `Finish`. No kind
@@ -308,7 +308,7 @@ impl Stream {
         }
     }
 
-    /// Initialize .xz Stream encoder using a custom filter chain
+    /// Initialize .lz Stream encoder using a custom filter chain
     ///
     /// This function is similar to `new_easy_encoder` but a custom filter chain
     /// is specified.
@@ -324,7 +324,7 @@ impl Stream {
         }
     }
 
-    /// Initialize a .xz stream decoder.
+    /// Initialize a .lz stream decoder.
     ///
     /// The maximum memory usage can be specified along with flags such as
     /// `TELL_ANY_CHECK`, `TELL_NO_CHECK`, `TELL_UNSUPPORTED_CHECK`,
@@ -710,7 +710,7 @@ impl MtStreamBuilder {
 
     /// Configures the maximum uncompressed size of a block
     ///
-    /// The encoder will start a new .xz block every `block_size` bytes.
+    /// The encoder will start a new .lz block every `block_size` bytes.
     /// Using `FullFlush` or `FullBarrier` with `process` the caller may tell
     /// liblzma to start a new block earlier.
     ///
@@ -748,7 +748,7 @@ impl MtStreamBuilder {
     /// To avoid very long blocking times in `process`, a timeout (in
     /// milliseconds) may be set here. If `process would block longer than
     /// this number of milliseconds, it will return with `Ok`. Reasonable
-    /// values are 100 ms or more. The xz command line tool uses 300 ms.
+    /// values are 100 ms or more. The lzip command line tool uses 300 ms.
     ///
     /// If long blocking times are fine for you, set timeout to a special
     /// value of 0, which will disable the timeout mechanism and will make
@@ -781,12 +781,12 @@ impl MtStreamBuilder {
         self
     }
 
-    /// Calculate approximate memory usage of multithreaded .xz encoder
+    /// Calculate approximate memory usage of multithreaded .lz encoder
     pub fn memusage(&self) -> u64 {
         unsafe { lzma_sys::lzma_stream_encoder_mt_memusage(&self.raw) }
     }
 
-    /// Initialize multithreaded .xz stream encoder.
+    /// Initialize multithreaded .lz stream encoder.
     pub fn encoder(&self) -> Result<Stream, Error> {
         unsafe {
             let mut init = Stream { raw: mem::zeroed() };
