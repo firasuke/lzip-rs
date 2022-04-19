@@ -19,7 +19,7 @@ name = "lzip_sys"
 path = "src/lib.rs"
 
 [dependencies]
-libc = "0.2.122"
+libc = "0.2.124"
 
 [build-dependencies]
 cc = "1.0.73"

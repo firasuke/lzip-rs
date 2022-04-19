@@ -148,11 +148,11 @@ impl<R: BufRead> LzDecoder<R> {
 
     /// Creates a new decoder which will decompress data read from the given
     /// input. All the concatenated lzip streams from input will be consumed.
-    pub fn new_multi_decoder(r: R) -> LzDecoder<R> {
-        let stream =
-            Stream::new_auto_decoder(u64::max_value(), lzma_sys::LZMA_CONCATENATED).unwrap();
-        LzDecoder::new_stream(r, stream)
-    }
+    // pub fn new_multi_decoder(r: R) -> LzDecoder<R> {
+    //     let stream =
+    //         Stream::new_auto_decoder(u64::max_value(), lzip_sys::LZMA_CONCATENATED).unwrap();
+    //     LzDecoder::new_stream(r, stream)
+    // }
 
     /// Creates a new decoder with a custom `Stream`.
     ///

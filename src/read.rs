@@ -121,11 +121,11 @@ impl<R: Read> LzDecoder<R> {
 
     /// Create a new decompression stream, which will read compressed
     /// data from the given input and decompress all the lzip stream it contains.
-    pub fn new_multi_decoder(r: R) -> LzDecoder<R> {
-        LzDecoder {
-            inner: bufread::LzDecoder::new_multi_decoder(BufReader::new(r)),
-        }
-    }
+    // pub fn new_multi_decoder(r: R) -> LzDecoder<R> {
+    //     LzDecoder {
+    //         inner: bufread::LzDecoder::new_multi_decoder(BufReader::new(r)),
+    //     }
+    // }
 
     /// Creates a new decoder with a custom `Stream`.
     ///

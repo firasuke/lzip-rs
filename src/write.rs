@@ -43,6 +43,7 @@ impl<W: Write> LzEncoder<W> {
             data: stream,
             obj: Some(obj),
             buf: Vec::with_capacity(32 * 1024),
+            done: false,
         }
     }
 
@@ -186,11 +187,11 @@ impl<W: Write> LzDecoder<W> {
 
     /// Creates a new decoding stream which will decode into `obj` all the lzip streams
     /// from the input written to it.
-    pub fn new_multi_decoder(obj: W) -> LzDecoder<W> {
-        let stream =
-            Stream::new_stream_decoder(u64::max_value(), lzma_sys::LZMA_CONCATENATED).unwrap();
-        LzDecoder::new_stream(obj, stream)
-    }
+    // pub fn new_multi_decoder(obj: W) -> LzDecoder<W> {
+    //     let stream =
+    //         Stream::new_stream_decoder(u64::max_value(), lzip_sys::LZMA_CONCATENATED).unwrap();
+    //     LzDecoder::new_stream(obj, stream)
+    // }
 
     /// Creates a new decoding stream which will decode all input written to it
     /// into `obj`.
@@ -202,6 +203,7 @@ impl<W: Write> LzDecoder<W> {
             data: stream,
             obj: Some(obj),
             buf: Vec::with_capacity(32 * 1024),
+            done: false,
         }
     }
 
