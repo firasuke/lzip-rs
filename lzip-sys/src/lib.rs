@@ -23,6 +23,13 @@ pub type State = c_int;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct LzmaOptions {
+    pub dictionary_size: c_int,
+    pub match_len_limit: c_int,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct LenModel {
     pub choice1: BitModel,
     pub choice2: BitModel,

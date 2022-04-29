@@ -45,9 +45,3 @@
 
 #![deny(missing_docs)]
 #![doc(html_root_url = "https://docs.rs/lzip/")]
-
-pub mod stream;
-
-pub mod bufread;
-pub mod read;
-pub mod write;
