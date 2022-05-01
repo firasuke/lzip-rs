@@ -45,3 +45,10 @@
 
 #![deny(missing_docs)]
 #![doc(html_root_url = "https://docs.rs/lzip/")]
+
+extern crate libc;
+
+pub mod bufread;
+pub mod read;
+
+mod mem;
